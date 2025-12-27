@@ -30,10 +30,10 @@ class SolitaireGame:
 
     def __str__(self) -> str:
         result = "Tableau:\n"
-        for i, pile in enumerate(self.tableau):
-            if pile:
+        for i, t_pile in enumerate(self.tableau):
+            if t_pile:
                 cards_str = []
-                for card, is_face_up in pile:
+                for card, is_face_up in t_pile:
                     if is_face_up:
                         cards_str.append(str(card))
                     else:
@@ -43,8 +43,8 @@ class SolitaireGame:
                 result += f"Pile {i + 1}: \n"
 
         result += "Foundation:\n"
-        for i, pile in enumerate(self.foundation):
-            result += f"Pile {i + 1}: " + ", ".join(str(card) for card in pile) + "\n"
+        for i, f_pile in enumerate(self.foundation):
+            result += f"Pile {i + 1}: " + ", ".join(str(card) for card in f_pile) + "\n"
 
         result += "Waste: " + ", ".join(str(card) for card in self.waste) + "\n"
 
@@ -179,6 +179,108 @@ class SolitaireGame:
         self.stock = []
         self.waste = []
         self.setup_game()
+
+    def get_game_state(self) -> bytes:
+        """
+        Returns a hashable bytes representation of the current game state.
+        Format:
+        - Stock Length (1 byte)
+        - Stock Cards (N bytes)
+        - Waste Length (1 byte)
+        - Waste Cards (M bytes)
+        - Foundation Counts (4 bytes)
+        - Tableau (7 piles):
+            - Pile Length (1 byte)
+            - Cards (K bytes, bit 6 set if face up)
+        """
+        data = bytearray()
+
+        # Stock
+        data.append(len(self.stock))
+        for card in self.stock:
+            data.append(self._card_to_int(card))
+
+        # Waste
+        data.append(len(self.waste))
+        for card in self.waste:
+            data.append(self._card_to_int(card))
+
+        # Foundation
+        for f_pile in self.foundation:
+            data.append(len(f_pile))
+
+        # Tableau
+        for t_pile in self.tableau:
+            data.append(len(t_pile))
+            for card, is_face_up in t_pile:
+                data.append(self._encode_tableau_card(card, is_face_up))
+
+        return bytes(data)
+
+    def set_game_state(self, state: bytes) -> None:
+        """
+        Restores the game state from a bytes representation.
+        """
+        data = memoryview(state)
+        idx = 0
+
+        # Stock
+        stock_len = data[idx]
+        idx += 1
+        self.stock = [self._int_to_card(data[i]) for i in range(idx, idx + stock_len)]
+        idx += stock_len
+
+        # Waste
+        waste_len = data[idx]
+        idx += 1
+        self.waste = [self._int_to_card(data[i]) for i in range(idx, idx + waste_len)]
+        idx += waste_len
+
+        # Foundation
+        self.foundation = []
+        for suit_offset in range(4):
+            count = data[idx]
+            idx += 1
+            suit = suit_offset + 1
+            f_pile = [Card(rank, suit) for rank in range(1, count + 1)]  # type: ignore
+            self.foundation.append(f_pile)
+
+        # Tableau
+        self.tableau = []
+        for _ in range(7):
+            pile_len = data[idx]
+            idx += 1
+            t_pile = []
+            for i in range(idx, idx + pile_len):
+                t_pile.append(self._decode_tableau_card(data[i]))
+            self.tableau.append(t_pile)
+            idx += pile_len
+
+    def _card_to_int(self, card: Card) -> int:
+        # Bits 0-3: Rank (0-12)
+        # Bits 4-5: Suit (0-3)
+        return ((card.suit - 1) << 4) | (card.rank - 1)
+
+    def _int_to_card(self, value: int) -> Card:
+        # Mask 0xF (1111 binary) gets the first 4 bits
+        rank = (value & 0xF) + 1
+        # Shift right 4 and mask 0x3 (11 binary) gets the next 2 bits
+        suit = ((value >> 4) & 0x3) + 1
+        return Card(rank, suit)  # type: ignore
+
+    def _encode_tableau_card(self, card: Card, is_face_up: bool) -> int:
+        val = self._card_to_int(card)
+        if is_face_up:
+            # Set bit 6
+            val |= 1 << 6
+        return val
+
+    def _decode_tableau_card(self, value: int) -> tuple[Card, bool]:
+        # Check bit 6
+        is_face_up = bool((value >> 6) & 1)
+        # Clear bit 6 to get the card value
+        card_val = value & ~(1 << 6)
+        return self._int_to_card(card_val), is_face_up
 
     def list_valid_moves(self) -> list[str]:
         moves = []
