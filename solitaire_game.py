@@ -1,4 +1,15 @@
+from typing import Literal
+
 from deck import BLANK, Card, Deck
+
+type GameAction = (
+    tuple[Literal["s"], tuple[()]]
+    | tuple[Literal["wf"], tuple[()]]
+    | tuple[Literal["wt"], tuple[int]]
+    | tuple[Literal["tf"], tuple[int]]
+    | tuple[Literal["ft"], tuple[int, int]]
+    | tuple[Literal["tt"], tuple[int, int]]
+)
 
 
 class SolitaireGame:
@@ -282,8 +293,9 @@ class SolitaireGame:
         card_val = value & ~(1 << 6)
         return self._int_to_card(card_val), is_face_up
 
-    def list_valid_moves(self) -> list[str]:
-        moves = []
+    def get_valid_moves(self) -> list[GameAction]:
+        moves: list[GameAction] = []
+
         # Check waste to foundation
         if self.waste:
             card = self.waste[-1]
@@ -291,14 +303,14 @@ class SolitaireGame:
             if (not foundation_pile and card.rank == 1) or (
                 foundation_pile and card.rank == foundation_pile[-1].rank + 1
             ):
-                moves.append("Waste to Foundation")
+                moves.append(("wf", ()))
 
         # Check waste to tableau
         if self.waste:
             card = self.waste[-1]
             for i in range(7):
                 if self.is_valid_tableau_move(card, i):
-                    moves.append(f"Waste to Tableau {i + 1}")
+                    moves.append(("wt", (i,)))
 
         # Check tableau to foundation
         for i in range(7):
@@ -308,7 +320,7 @@ class SolitaireGame:
                 if (not foundation_pile and card.rank == 1) or (
                     foundation_pile and card.rank == foundation_pile[-1].rank + 1
                 ):
-                    moves.append(f"Tableau {i + 1} to Foundation")
+                    moves.append(("tf", (i,)))
 
         # Check tableau to tableau
         for from_idx in range(7):
@@ -320,9 +332,7 @@ class SolitaireGame:
                         if not moving_cards[0][1]:
                             break
                         if self.is_valid_tableau_move(moving_cards[0][0], to_idx):
-                            moves.append(
-                                f"Tableau {from_idx + 1} to Tableau {to_idx + 1} ({n} cards)"
-                            )
+                            moves.append(("tt", (from_idx, to_idx)))
 
         # Check foundation to tableau
         for f_idx in range(4):
@@ -330,11 +340,48 @@ class SolitaireGame:
                 card = self.foundation[f_idx][-1]
                 for t_idx in range(7):
                     if self.is_valid_tableau_move(card, t_idx):
-                        moves.append(f"Foundation {f_idx + 1} to Tableau {t_idx + 1}")
+                        moves.append(("ft", (f_idx, t_idx)))
 
         # Check draw from stock
         if self.stock or self.waste:
-            moves.append("Draw from Stock")
+            moves.append(("s", ()))
+
+        return moves
+
+    def make_move(self, action: GameAction) -> None:
+        if action[0] == "s":
+            self.draw_from_stock()
+        elif action[0] == "wf":
+            self.move_waste_to_foundation()
+        elif action[0] == "wt":
+            self.move_waste_to_tableau(action[1][0])  # ty: ignore[index-out-of-bounds]
+        elif action[0] == "tf":
+            self.move_tableau_to_foundation(action[1][0])  # ty: ignore[index-out-of-bounds]
+        elif action[0] == "ft":
+            self.foundation_to_tableau(action[1][0], action[1][1])  # ty: ignore[index-out-of-bounds]
+        elif action[0] == "tt":
+            self.move_tableau_to_tableau(action[1][0], action[1][1])  # ty: ignore[index-out-of-bounds]
+
+    def list_valid_moves(self) -> list[str]:
+        # simply return string representations of the moves
+        moves: list[str] = []
+        for action in self.get_valid_moves():
+            if action[0] == "s":
+                moves.append("Draw from stock")
+            elif action[0] == "wf":
+                moves.append("Move waste to foundation")
+            elif action[0] == "wt":
+                moves.append(f"Move waste to tableau pile {action[1][0] + 1}")  # ty: ignore[index-out-of-bounds]
+            elif action[0] == "tf":
+                moves.append(f"Move tableau pile {action[1][0] + 1} to foundation")  # ty: ignore[index-out-of-bounds]
+            elif action[0] == "ft":
+                moves.append(
+                    f"Move foundation pile {action[1][0] + 1} to tableau pile {action[1][1] + 1}"  # ty: ignore[index-out-of-bounds]
+                )
+            elif action[0] == "tt":
+                moves.append(
+                    f"Move cards from tableau pile {action[1][0] + 1} to tableau pile {action[1][1] + 1}"  # ty: ignore[index-out-of-bounds]
+                )
 
         return moves
 
