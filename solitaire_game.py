@@ -59,8 +59,8 @@ class SolitaireGame:
             raise ValueError("No cards in the selected tableau pile")
         card, _ = self.tableau[tableau_index][-1]
         foundation_pile = self.foundation[card.suit - 1]
-        if (not foundation_pile and card.value == 1) or (
-            foundation_pile and card.value == foundation_pile[-1].value + 1
+        if (not foundation_pile and card.rank == 1) or (
+            foundation_pile and card.rank == foundation_pile[-1].rank + 1
         ):
             self.tableau[tableau_index].pop()
             foundation_pile.append(card)
@@ -70,24 +70,34 @@ class SolitaireGame:
         else:
             raise ValueError("Invalid move to foundation")
 
-    def move_tableau_to_tableau(
-        self, from_index: int, to_index: int, num_cards: int
-    ) -> None:
-        if len(self.tableau[from_index]) < num_cards:
-            raise ValueError("Not enough cards in the selected tableau pile")
+    def move_tableau_to_tableau(self, from_index: int, to_index: int) -> None:
+        if not self.tableau[from_index]:
+            raise ValueError("No cards in the selected tableau pile")
+
+        # Find the deepest face-up card that can be moved to to_index
+        valid_num_cards = 0
+        found_move = False
+        source_pile = self.tableau[from_index]
+
+        for i in range(len(source_pile)):
+            card, is_face_up = source_pile[i]
+            if is_face_up:
+                if self.is_valid_tableau_move(card, to_index):
+                    valid_num_cards = len(source_pile) - i
+                    found_move = True
+                    break
+
+        if not found_move:
+            raise ValueError("Invalid move to tableau")
+
+        num_cards = valid_num_cards
         moving_cards = self.tableau[from_index][-num_cards:]
 
-        if not moving_cards[0][1]:
-            raise ValueError("Cannot move face-down cards")
-
-        if self.is_valid_tableau_move(moving_cards[0][0], to_index):
-            self.tableau[from_index] = self.tableau[from_index][:-num_cards]
-            self.tableau[to_index].extend(moving_cards)
-            if self.tableau[from_index]:
-                new_top_card, _ = self.tableau[from_index][-1]
-                self.tableau[from_index][-1] = (new_top_card, True)
-        else:
-            raise ValueError("Invalid move to tableau")
+        self.tableau[from_index] = self.tableau[from_index][:-num_cards]
+        self.tableau[to_index].extend(moving_cards)
+        if self.tableau[from_index]:
+            new_top_card, _ = self.tableau[from_index][-1]
+            self.tableau[from_index][-1] = (new_top_card, True)
 
     def draw_from_stock(self) -> None:
         if not self.stock:
@@ -105,8 +115,8 @@ class SolitaireGame:
             raise ValueError("No cards in the waste pile")
         card = self.waste[-1]
         foundation_pile = self.foundation[card.suit - 1]
-        if (not foundation_pile and card.value == 1) or (
-            foundation_pile and card.value == foundation_pile[-1].value + 1
+        if (not foundation_pile and card.rank == 1) or (
+            foundation_pile and card.rank == foundation_pile[-1].rank + 1
         ):
             self.waste.pop()
             foundation_pile.append(card)
@@ -135,13 +145,13 @@ class SolitaireGame:
 
     def is_valid_tableau_move(self, card: Card, to_index: int) -> bool:
         if not self.tableau[to_index]:
-            return card.value == 13  # Only Kings can be placed on empty tableau piles
+            return card.rank == 13  # Only Kings can be placed on empty tableau piles
         dest_card, _ = self.tableau[to_index][-1]
         # Check for alternating colors and descending order
         if (card.suit in (1, 3) and dest_card.suit in (2, 4)) or (
             card.suit in (2, 4) and dest_card.suit in (1, 3)
         ):
-            return card.value == dest_card.value - 1
+            return card.rank == dest_card.rank - 1
         return False
 
     def is_game_won(self) -> bool:
@@ -176,8 +186,8 @@ class SolitaireGame:
         if self.waste:
             card = self.waste[-1]
             foundation_pile = self.foundation[card.suit - 1]
-            if (not foundation_pile and card.value == 1) or (
-                foundation_pile and card.value == foundation_pile[-1].value + 1
+            if (not foundation_pile and card.rank == 1) or (
+                foundation_pile and card.rank == foundation_pile[-1].rank + 1
             ):
                 moves.append("Waste to Foundation")
 
@@ -193,8 +203,8 @@ class SolitaireGame:
             if self.tableau[i]:
                 card, _ = self.tableau[i][-1]
                 foundation_pile = self.foundation[card.suit - 1]
-                if (not foundation_pile and card.value == 1) or (
-                    foundation_pile and card.value == foundation_pile[-1].value + 1
+                if (not foundation_pile and card.rank == 1) or (
+                    foundation_pile and card.rank == foundation_pile[-1].rank + 1
                 ):
                     moves.append(f"Tableau {i + 1} to Foundation")
 
@@ -211,6 +221,18 @@ class SolitaireGame:
                             moves.append(
                                 f"Tableau {from_idx + 1} to Tableau {to_idx + 1} ({n} cards)"
                             )
+
+        # Check foundation to tableau
+        for f_idx in range(4):
+            if self.foundation[f_idx]:
+                card = self.foundation[f_idx][-1]
+                for t_idx in range(7):
+                    if self.is_valid_tableau_move(card, t_idx):
+                        moves.append(f"Foundation {f_idx + 1} to Tableau {t_idx + 1}")
+
+        # Check draw from stock
+        if self.stock or self.waste:
+            moves.append("Draw from Stock")
 
         return moves
 
@@ -230,7 +252,7 @@ def main():
         print("  wt <T>     : Move waste to tableau pile <T>")
         print("  tf <T>     : Move tableau pile <T> to foundation")
         print("  ft <F> <T> : Move foundation <F> to tableau pile <T>")
-        print("  tt <F> <T> <N>: Move <N> cards from tableau <F> to <T>")
+        print("  tt <F> <T> : Move cards from tableau <F> to <T>")
         print("  q          : Quit")
 
         valid_moves = game.list_valid_moves()
@@ -272,13 +294,12 @@ def main():
                 t_idx = int(command[2]) - 1
                 game.foundation_to_tableau(f_idx, t_idx)
             elif cmd == "tt":
-                if len(command) != 4:
-                    print("Usage: tt <from_index> <to_index> <num_cards>")
+                if len(command) != 3:
+                    print("Usage: tt <from_index> <to_index>")
                     continue
                 f_idx = int(command[1]) - 1
                 t_idx = int(command[2]) - 1
-                n = int(command[3])
-                game.move_tableau_to_tableau(f_idx, t_idx, n)
+                game.move_tableau_to_tableau(f_idx, t_idx)
             else:
                 print("Unknown command.")
         except (ValueError, IndexError) as e:

@@ -3,7 +3,7 @@ from itertools import product
 from typing import Final, Literal
 
 type Suit = Literal[1, 2, 3, 4]
-type Value = Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+type Rank = Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 SUITS_MAP: dict[Suit, tuple[str, str]] = {
     1: ("Hearts", "♥"),
@@ -11,7 +11,7 @@ SUITS_MAP: dict[Suit, tuple[str, str]] = {
     3: ("Diamonds", "♦"),
     4: ("Spades", "♠"),
 }
-VALUES_MAP: dict[Value, tuple[str, str]] = {
+RANK_MAP: dict[Rank, tuple[str, str]] = {
     1: ("Ace", "A"),
     2: ("Two", "2"),
     3: ("Three", "3"),
@@ -29,21 +29,21 @@ VALUES_MAP: dict[Value, tuple[str, str]] = {
 
 
 class Card:
-    def __init__(self, value: Value, suit: Suit) -> None:
-        self.value: Final[Value] = value
+    def __init__(self, rank: Rank, suit: Suit) -> None:
+        self.rank: Final[Rank] = rank
         self.suit: Final[Suit] = suit
 
     def __repr__(self) -> str:
-        return f"Card({self.value}, {self.suit})"
+        return f"Card({self.rank}, {self.suit})"
 
     def __str__(self) -> str:
         # return f"{VALUES_MAP[self.value][1]}{SUITS_MAP[self.suit][1]}"
         # display with ANSI colors
         suit_symbol = SUITS_MAP[self.suit][1]
         if self.suit in (1, 3):  # Hearts and Diamonds are red
-            return f"\033[91m{VALUES_MAP[self.value][1]}{suit_symbol}\033[0m"
+            return f"\033[91m{RANK_MAP[self.rank][1]}{suit_symbol}\033[0m"
         else:  # Clubs and Spades are black
-            return f"\033[90m{VALUES_MAP[self.value][1]}{suit_symbol}\033[0m"
+            return f"\033[90m{RANK_MAP[self.rank][1]}{suit_symbol}\033[0m"
 
 
 class BlankCard:
@@ -65,7 +65,7 @@ BLANK = BlankCard()
 class Deck:
     def __init__(self) -> None:
         self.cards: list[Card] = [
-            Card(v, s) for s, v in product(SUITS_MAP.keys(), VALUES_MAP.keys())
+            Card(r, s) for s, r in product(SUITS_MAP.keys(), RANK_MAP.keys())
         ]
 
     def __repr__(self) -> str:
