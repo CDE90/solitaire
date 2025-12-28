@@ -1,6 +1,7 @@
 import random
+from dataclasses import dataclass
 from itertools import product
-from typing import Final, Literal
+from typing import Literal
 
 type Suit = Literal[1, 2, 3, 4]
 type Rank = Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
@@ -28,17 +29,15 @@ RANK_MAP: dict[Rank, tuple[str, str]] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
 class Card:
-    def __init__(self, rank: Rank, suit: Suit) -> None:
-        self.rank: Final[Rank] = rank
-        self.suit: Final[Suit] = suit
+    rank: Rank
+    suit: Suit
 
     def __repr__(self) -> str:
         return f"Card({self.rank}, {self.suit})"
 
     def __str__(self) -> str:
-        # return f"{VALUES_MAP[self.value][1]}{SUITS_MAP[self.suit][1]}"
-        # display with ANSI colors
         suit_symbol = SUITS_MAP[self.suit][1]
         if self.suit in (1, 3):  # Hearts and Diamonds are red
             return f"\033[91m{RANK_MAP[self.rank][1]}{suit_symbol}\033[0m"
@@ -54,8 +53,6 @@ class BlankCard:
         return "BlankCard()"
 
     def __str__(self) -> str:
-        # return "XX"
-        # display with regular ansi black (not high intensity)
         return "\033[94mXX\033[0m"
 
 

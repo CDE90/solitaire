@@ -231,7 +231,7 @@ class SolitaireGame:
             tableau_piles_data.append(pile_data)
 
         # Sort the piles
-        tableau_piles_data.sort()
+        # tableau_piles_data.sort()
 
         for pile_data in tableau_piles_data:
             data.extend(pile_data)
@@ -277,17 +277,69 @@ class SolitaireGame:
             self.tableau.append(t_pile)
             idx += pile_len
 
+    def read_game_state(
+        self, state: bytes
+    ) -> tuple[list[Card], list[Card], list[list[Card]], list[list[tuple[Card, bool]]]]:
+        # we want to convert a game state bytes object into a tuple of piles, etc. that can be used to calculate heuristics
+        data = memoryview(state)
+        idx = 0
+
+        # Stock
+        stock_len = data[idx]
+        idx += 1
+        stock: list[Card] = [
+            self._int_to_card(data[i]) for i in range(idx, idx + stock_len)
+        ]
+        idx += stock_len
+
+        # Waste
+        waste_len = data[idx]
+        idx += 1
+        waste: list[Card] = [
+            self._int_to_card(data[i]) for i in range(idx, idx + waste_len)
+        ]
+        idx += waste_len
+
+        # Foundation
+        foundation: list[list[Card]] = []
+        for suit_offset in range(4):
+            count = data[idx]
+            idx += 1
+            suit = suit_offset + 1
+            f_pile: list[Card] = [Card(rank, suit) for rank in range(1, count + 1)]  # type: ignore
+            foundation.append(f_pile)
+
+        # Tableau
+        tableau: list[list[tuple[Card, bool]]] = []
+        for _ in range(7):
+            pile_len = data[idx]
+            idx += 1
+            t_pile: list[tuple[Card, bool]] = []
+            for i in range(idx, idx + pile_len):
+                t_pile.append(self._decode_tableau_card(data[i]))
+            tableau.append(t_pile)
+            idx += pile_len
+
+        return stock, waste, foundation, tableau
+
     def _card_to_int(self, card: Card) -> int:
         # Bits 0-3: Rank (0-12)
         # Bits 4-5: Suit (0-3)
         return ((card.suit - 1) << 4) | (card.rank - 1)
 
+    _int_to_card_cache: dict[int, Card] = {}
+
     def _int_to_card(self, value: int) -> Card:
+        if value in self._int_to_card_cache:
+            return self._int_to_card_cache[value]
+
         # Mask 0xF (1111 binary) gets the first 4 bits
         rank = (value & 0xF) + 1
         # Shift right 4 and mask 0x3 (11 binary) gets the next 2 bits
         suit = ((value >> 4) & 0x3) + 1
-        return Card(rank, suit)  # type: ignore
+        card = Card(rank, suit)  # type: ignore
+        self._int_to_card_cache[value] = card
+        return card
 
     def _encode_tableau_card(self, card: Card, is_face_up: bool) -> int:
         val = self._card_to_int(card)
@@ -296,12 +348,19 @@ class SolitaireGame:
             val |= 1 << 6
         return val
 
+    _decode_tableau_card_cache: dict[int, tuple[Card, bool]] = {}
+
     def _decode_tableau_card(self, value: int) -> tuple[Card, bool]:
+        if value in self._decode_tableau_card_cache:
+            return self._decode_tableau_card_cache[value]
+
         # Check bit 6
         is_face_up = bool((value >> 6) & 1)
         # Clear bit 6 to get the card value
         card_val = value & ~(1 << 6)
-        return self._int_to_card(card_val), is_face_up
+        result = self._int_to_card(card_val), is_face_up
+        self._decode_tableau_card_cache[value] = result
+        return result
 
     def get_valid_moves(self) -> list[GameAction]:
         moves: list[GameAction] = []
