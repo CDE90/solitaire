@@ -221,10 +221,20 @@ class SolitaireGame:
             data.append(len(f_pile))
 
         # Tableau
+        # Serialise each pile first so we can sort them to canonicalise the state
+        tableau_piles_data: list[bytearray] = []
         for t_pile in self.tableau:
-            data.append(len(t_pile))
+            pile_data = bytearray()
+            pile_data.append(len(t_pile))
             for card, is_face_up in t_pile:
-                data.append(self._encode_tableau_card(card, is_face_up))
+                pile_data.append(self._encode_tableau_card(card, is_face_up))
+            tableau_piles_data.append(pile_data)
+
+        # Sort the piles
+        tableau_piles_data.sort()
+
+        for pile_data in tableau_piles_data:
+            data.extend(pile_data)
 
         return bytes(data)
 
